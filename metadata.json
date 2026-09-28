@@ -1,0 +1,6 @@
+{
+  "name": "CineScope - Movie Recommendations & Discovery",
+  "description": "Browse, search, and discover personalized movie recommendations with genre filters, mood matching, and interactive watchlist.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
