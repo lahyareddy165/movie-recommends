@@ -16,7 +16,7 @@ import { MovieDetailModal } from './components/MovieDetailModal';
 import { TrailerModal } from './components/TrailerModal';
 import { RecommenderWizard } from './components/RecommenderWizard';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
-import { Sparkles, Compass, Shuffle, Check } from 'lucide-react';
+import { Sparkles, Shuffle, Bookmark } from 'lucide-react';
 
 export default function App() {
   // Navigation & View state
@@ -122,6 +122,11 @@ export default function App() {
   const filteredMovies = useMemo(() => {
     let list = [...MOVIES_DATABASE];
 
+    // Filter by Watchlist view tab
+    if (activeTab === 'watchlist') {
+      list = list.filter((m) => watchlistIds.includes(m.id));
+    }
+
     // Filter by genre
     if (selectedGenre !== 'All') {
       list = list.filter((m) => m.genres.includes(selectedGenre));
@@ -137,6 +142,9 @@ export default function App() {
           m.cast.some((actor) => actor.toLowerCase().includes(q)) ||
           m.genres.some((genre) => genre.toLowerCase().includes(q)) ||
           m.synopsis.toLowerCase().includes(q) ||
+          (m.tagline && m.tagline.toLowerCase().includes(q)) ||
+          (m.awards && m.awards.toLowerCase().includes(q)) ||
+          m.contentRating.toLowerCase().includes(q) ||
           m.moods.some((mood) => mood.toLowerCase().includes(q))
       );
     }
@@ -170,14 +178,14 @@ export default function App() {
     });
 
     return list;
-  }, [selectedGenre, searchQuery, minRating, selectedMood, sortBy]);
+  }, [activeTab, watchlistIds, selectedGenre, searchQuery, minRating, selectedMood, sortBy]);
 
   // Featured spotlight movies
   const featuredMovies = useMemo(() => {
     return MOVIES_DATABASE.filter((m) => m.featured);
   }, []);
 
-  // Watchlist movies list
+  // Watchlist movies list for drawer
   const watchlistMovies = useMemo(() => {
     const map = new Map<string, Movie>();
     MOVIES_DATABASE.forEach((m) => map.set(m.id, m));
@@ -199,6 +207,7 @@ export default function App() {
     setMinRating(0);
     setSelectedMood('');
     setSortBy('rating-desc');
+    setActiveTab('browse');
   };
 
   return (
@@ -233,6 +242,24 @@ export default function App() {
         />
 
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-10 mt-6">
+          {/* Active Tab Notice if on Watchlist */}
+          {activeTab === 'watchlist' && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+              <div className="flex items-center gap-2.5 text-xs text-amber-200">
+                <Bookmark className="w-4 h-4 text-amber-400 fill-amber-400/30" />
+                <span>
+                  Viewing your <strong>Saved Watchlist</strong> ({watchlistIds.length} titles)
+                </span>
+              </div>
+              <button
+                onClick={() => setActiveTab('browse')}
+                className="text-xs text-amber-400 font-semibold hover:underline cursor-pointer"
+              >
+                ← Return to All Movies
+              </button>
+            </div>
+          )}
+
           {/* Recommender Banner Prompt */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-900 border border-amber-500/30 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
@@ -250,13 +277,13 @@ export default function App() {
             <div className="flex items-center gap-3 shrink-0">
               <button
                 onClick={() => setIsRecommenderOpen(true)}
-                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-lg transition-all shadow-md shadow-amber-500/20 whitespace-nowrap"
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-lg transition-all shadow-md shadow-amber-500/20 whitespace-nowrap cursor-pointer"
               >
                 Launch Recommender
               </button>
               <button
                 onClick={handleSurpriseMe}
-                className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-xs rounded-lg border border-zinc-700 transition-colors whitespace-nowrap flex items-center gap-1.5"
+                className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-xs rounded-lg border border-zinc-700 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer"
               >
                 <Shuffle className="w-3.5 h-3.5 text-amber-400" />
                 <span>Spin Random</span>
@@ -295,14 +322,18 @@ export default function App() {
             onToggleBookmark={toggleBookmark}
             onResetFilters={handleResetFilters}
             title={
-              selectedGenre === 'All'
+              activeTab === 'watchlist'
+                ? 'Your Saved Watchlist'
+                : selectedGenre === 'All'
                 ? searchQuery
                   ? `Search Results for "${searchQuery}"`
                   : 'All Recommended Movies'
                 : `${selectedGenre} Recommendations`
             }
             subtitle={
-              selectedGenre === 'All'
+              activeTab === 'watchlist'
+                ? 'Films you have bookmarked to experience'
+                : selectedGenre === 'All'
                 ? 'Critically acclaimed motion pictures and modern masterpieces'
                 : `Top rated titles in the ${selectedGenre} category`
             }
@@ -373,19 +404,19 @@ export default function App() {
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="hover:text-zinc-300 transition-colors"
+              className="hover:text-zinc-300 transition-colors cursor-pointer"
             >
               Back to Top
             </button>
             <button
               onClick={() => setIsRecommenderOpen(true)}
-              className="hover:text-amber-400 transition-colors"
+              className="hover:text-amber-400 transition-colors cursor-pointer"
             >
               Recommender
             </button>
             <button
               onClick={() => setIsWatchlistOpen(true)}
-              className="hover:text-zinc-300 transition-colors"
+              className="hover:text-zinc-300 transition-colors cursor-pointer"
             >
               Watchlist ({watchlistIds.length})
             </button>
