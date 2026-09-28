@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Movie, Genre, Mood } from '../types/movie';
-import { Sparkles, RefreshCw, X, Check, Star, Play, Bookmark, BookmarkCheck } from 'lucide-react';
+import { Sparkles, RefreshCw, X, Check, Star, Play, Bookmark, BookmarkCheck, MessageSquare } from 'lucide-react';
 
 interface RecommenderWizardProps {
   allMovies: Movie[];
@@ -39,8 +39,10 @@ export const RecommenderWizard: React.FC<RecommenderWizardProps> = ({
   const [selectedMood, setSelectedMood] = useState<Mood>('Mind-Bending');
   const [selectedGenres, setSelectedGenres] = useState<Genre[]>(['Sci-Fi']);
   const [runtimePref, setRuntimePref] = useState<'any' | 'short' | 'epic'>('any');
-  const [results, setResults] = useState<{ movie: Movie; score: number; reason: string }[] | null>(null);
+  const [customPrompt, setCustomPrompt] = useState<string>('');
+  const [results, setResults] = useState<{ movie: Movie; score: number; reason: string; vibeHighlight?: string }[] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [curatorNote, setCuratorNote] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -54,33 +56,70 @@ export const RecommenderWizard: React.FC<RecommenderWizardProps> = ({
     }
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setIsGenerating(true);
+
+    try {
+      const response = await fetch('/api/ai/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mood: selectedMood,
+          genres: selectedGenres,
+          runtimePref,
+          customPrompt,
+          candidateMovies: allMovies,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.recommendations && data.recommendations.length > 0) {
+          const movieMap = new Map(allMovies.map((m) => [m.id, m]));
+          const formatted = data.recommendations
+            .map((rec: any) => {
+              const movie = movieMap.get(rec.movieId);
+              if (!movie) return null;
+              return {
+                movie,
+                score: rec.score || 95,
+                reason: rec.reason || movie.matchReason,
+                vibeHighlight: rec.vibeHighlight,
+              };
+            })
+            .filter(Boolean);
+
+          if (formatted.length > 0) {
+            setResults(formatted);
+            setCuratorNote(data.curatorSummary || '');
+            setIsGenerating(false);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('API error, using local fallback:', err);
+    }
+
+    // Local fallback calculation
     setTimeout(() => {
-      // Calculate scores
       const scored = allMovies.map((movie) => {
         let score = 50;
 
-        // Mood match
         if (movie.moods.includes(selectedMood)) {
           score += 35;
         }
 
-        // Genre match
         const matchingGenres = movie.genres.filter((g) => selectedGenres.includes(g));
         score += matchingGenres.length * 15;
 
-        // Runtime match
         if (runtimePref === 'short' && movie.runtimeMinutes < 120) score += 15;
         if (runtimePref === 'epic' && movie.runtimeMinutes >= 140) score += 15;
 
-        // Rating boost
         score += Math.round(movie.rating * 2);
 
-        // Cap at 99
         const finalScore = Math.min(score, 99);
 
-        // Build personalized reason
         let customReason = movie.matchReason || '';
         if (movie.moods.includes(selectedMood)) {
           customReason = `Tailored for your "${selectedMood}" mood with seamless blend of ${movie.genres.join(', ')}.`;
@@ -90,13 +129,14 @@ export const RecommenderWizard: React.FC<RecommenderWizardProps> = ({
           movie,
           score: finalScore,
           reason: customReason,
+          vibeHighlight: movie.tagline,
         };
       });
 
       scored.sort((a, b) => b.score - a.score);
       setResults(scored.slice(0, 3));
       setIsGenerating(false);
-    }, 450);
+    }, 400);
   };
 
   return (
@@ -110,10 +150,10 @@ export const RecommenderWizard: React.FC<RecommenderWizardProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-bold text-white font-display">
-                Personalized Recommendation Engine
+                Intelligent Movie Recommendation Engine
               </h2>
               <p className="text-xs text-zinc-400">
-                Answer a few quick questions to find your ideal cinematic match tonight
+                Powered by server-side cinema curation to find your ideal film match
               </p>
             </div>
           </div>
@@ -209,16 +249,31 @@ export const RecommenderWizard: React.FC<RecommenderWizardProps> = ({
               </div>
             </div>
 
+            {/* Step 4: Custom Vibe Input */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-white flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                <span>4. Specific request or vibe description (Optional)</span>
+              </label>
+              <input
+                type="text"
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="e.g., 'A rainy neo-noir mystery with philosophical depth', 'father daughter emotional bond'..."
+                className="w-full px-3.5 py-2.5 bg-zinc-900/90 text-xs text-white placeholder-zinc-500 rounded-xl border border-zinc-800 focus:outline-none focus:border-amber-500/80"
+              />
+            </div>
+
             {/* Submit Action */}
             <button
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm rounded-xl transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+              className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm rounded-xl transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
             >
               {isGenerating ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin text-black" />
-                  <span>Analyzing Film Database...</span>
+                  <span>Consulting CineScope AI Recommendation Engine...</span>
                 </>
               ) : (
                 <>
@@ -231,15 +286,16 @@ export const RecommenderWizard: React.FC<RecommenderWizardProps> = ({
         ) : (
           /* Results View */
           <div className="space-y-6">
-            <div className="flex items-center justify-between bg-zinc-900/70 p-3 rounded-xl border border-zinc-800">
+            <div className="flex items-center justify-between bg-zinc-900/70 p-3.5 rounded-xl border border-zinc-800">
               <div className="text-xs text-zinc-300">
                 Found <strong className="text-amber-400">{results.length} Top Matches</strong> for{' '}
                 <span className="text-white font-medium">"{selectedMood}"</span> with{' '}
                 <span className="text-white font-medium">{selectedGenres.join(', ')}</span>
+                {curatorNote && <div className="text-zinc-400 mt-1 italic">{curatorNote}</div>}
               </div>
               <button
                 onClick={() => setResults(null)}
-                className="text-xs text-amber-400 hover:underline flex items-center gap-1 font-medium"
+                className="text-xs text-amber-400 hover:underline flex items-center gap-1 font-medium shrink-0 ml-2"
               >
                 <RefreshCw className="w-3 h-3" />
                 <span>Refine Answers</span>
@@ -247,7 +303,7 @@ export const RecommenderWizard: React.FC<RecommenderWizardProps> = ({
             </div>
 
             <div className="space-y-4">
-              {results.map(({ movie, score, reason }, idx) => {
+              {results.map(({ movie, score, reason, vibeHighlight }, idx) => {
                 const bookmarked = isBookmarked(movie.id);
 
                 return (
@@ -320,6 +376,13 @@ export const RecommenderWizard: React.FC<RecommenderWizardProps> = ({
                           )}
                         </button>
                       </div>
+
+                      {/* Vibe Highlight Badge */}
+                      {vibeHighlight && (
+                        <div className="text-[11px] font-mono text-amber-400/90 font-medium">
+                          ✦ {vibeHighlight}
+                        </div>
+                      )}
 
                       {/* Curation Reason */}
                       <p className="text-xs text-amber-200/90 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20 leading-relaxed">

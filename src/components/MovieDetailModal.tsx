@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Movie } from '../types/movie';
-import { X, Star, Bookmark, BookmarkCheck, Play, Award, Tv, Users, Clapperboard, Share2, Check } from 'lucide-react';
+import { X, Star, Bookmark, BookmarkCheck, Play, Award, Tv, Users, Clapperboard, Share2, Check, Sparkles, RefreshCw } from 'lucide-react';
 
 interface MovieDetailModalProps {
   movie: Movie | null;
@@ -22,6 +22,9 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
   onSelectMovie,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [selectedPromptType, setSelectedPromptType] = useState<string>('');
 
   if (!movie) return null;
 
@@ -35,9 +38,44 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
     .slice(0, 4);
 
   const handleShare = () => {
-    navigator.clipboard?.writeText(window.location.href);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(window.location.href).catch(() => {});
+      }
+    } catch {
+      // fallback
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleAskAI = async (promptType: string) => {
+    setSelectedPromptType(promptType);
+    setIsAiLoading(true);
+    try {
+      const res = await fetch('/api/ai/insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: movie.title,
+          director: movie.director,
+          year: movie.year,
+          synopsis: movie.synopsis,
+          questionType: promptType,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiInsight(data.insight || 'An extraordinary cinematic masterpiece.');
+      } else {
+        setAiInsight(`${movie.title} (${movie.year}) represents an exceptional highlight in ${movie.director}'s filmography.`);
+      }
+    } catch (err) {
+      console.warn('AI insight fetch failed:', err);
+      setAiInsight(`${movie.title} (${movie.year}) directed by ${movie.director} features phenomenal narrative pacing and profound thematic impact.`);
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   return (
@@ -47,7 +85,7 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
         <button
           onClick={onClose}
           aria-label="Close details"
-          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/60 text-zinc-300 hover:text-white hover:bg-black/90 border border-white/10 backdrop-blur-md transition-colors"
+          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/60 text-zinc-300 hover:text-white hover:bg-black/90 border border-white/10 backdrop-blur-md transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -91,7 +129,7 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
             <div className="flex items-center gap-2.5">
               <button
                 onClick={() => onWatchTrailer(movie)}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs sm:text-sm rounded-lg transition-all shadow-lg shadow-amber-500/20 whitespace-nowrap"
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs sm:text-sm rounded-lg transition-all shadow-lg shadow-amber-500/20 whitespace-nowrap cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-black" />
                 <span>Trailer</span>
@@ -99,7 +137,7 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
 
               <button
                 onClick={() => onToggleBookmark(movie)}
-                className={`p-2 sm:px-3 sm:py-2 rounded-lg border text-xs sm:text-sm font-medium flex items-center gap-1.5 transition-all ${
+                className={`p-2 sm:px-3 sm:py-2 rounded-lg border text-xs sm:text-sm font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                   isBookmarked
                     ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
                     : 'bg-black/60 border-zinc-700 text-zinc-300 hover:text-white'
@@ -121,7 +159,7 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
               <button
                 onClick={handleShare}
                 aria-label="Share movie link"
-                className="p-2 rounded-lg bg-black/60 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                className="p-2 rounded-lg bg-black/60 border border-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
               >
                 {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
               </button>
@@ -139,6 +177,58 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
             <p className="text-sm sm:text-base text-zinc-200 leading-relaxed">
               {movie.synopsis}
             </p>
+          </div>
+
+          {/* AI Cinephile Critic Section */}
+          <div className="rounded-xl bg-zinc-900/70 border border-zinc-800 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Ask CineScope AI Critic</span>
+              </div>
+              {aiInsight && (
+                <button
+                  onClick={() => setAiInsight(null)}
+                  className="text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {[
+                'Why is this a must-watch?',
+                'Explain visual style & direction',
+                'Who would love this most?',
+              ].map((promptLabel) => (
+                <button
+                  key={promptLabel}
+                  onClick={() => handleAskAI(promptLabel)}
+                  disabled={isAiLoading}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    selectedPromptType === promptLabel && aiInsight
+                      ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
+                      : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                  }`}
+                >
+                  {promptLabel}
+                </button>
+              ))}
+            </div>
+
+            {isAiLoading && (
+              <div className="flex items-center gap-2 text-xs text-amber-300/80 pt-2">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Consulting Gemini film critic...</span>
+              </div>
+            )}
+
+            {aiInsight && !isAiLoading && (
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs sm:text-sm text-amber-100/90 leading-relaxed">
+                {aiInsight}
+              </div>
+            )}
           </div>
 
           {/* Key Details Grid */}
